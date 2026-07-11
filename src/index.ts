@@ -14,7 +14,7 @@ const io = new SocketIOServer(server, {
             "https://localhost",
             "https://localhost/",
             "http://192.168.1.47:3000",
-            "https://apex-packaging-industries.onrender.com/",
+            "https://apex-packaging-industries.onrender.com",
             "https://jconstruction-frontend.onrender.com",
             "https://jconstruction-frontend-prod.onrender.com",
         ],
