@@ -19,6 +19,7 @@ app.use(bodyParser.json());
 
 const whitelist = [
     "http://localhost:3000",
+    "https://apex-packaging-industries.onrender.com/",
     "https://jconstruction-frontend.onrender.com",
     "https://jconstruction-frontend-prod.onrender.com",
     "https://localhost",
