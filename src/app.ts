@@ -5,6 +5,7 @@ import path from "path";
 import bodyParser from "body-parser";
 import connectDB from "./config/mongoose";
 import userRoutes from "./routes/userRoutes";
+import serviceRoute from "./routes/serviceRoute";
 import invoiceRoutes from "./routes/invoiceRoute";
 import quotationRoute from "./routes/quotationRoute";
 import bankDetailRoutes from "./routes/bankDetailRoutes";
@@ -52,6 +53,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use("/api/users", userRoutes);
+app.use("/api/services", serviceRoute);
 app.use("/api/invoice", invoiceRoutes);
 app.use("/api/quotation", quotationRoute);
 app.use("/api/bankDetail", bankDetailRoutes);
