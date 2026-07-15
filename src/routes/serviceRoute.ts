@@ -16,8 +16,6 @@ router.post("/add", authenticateToken, async (req, res) => {
         const {
             id,
             title,
-            hsnSac,
-            gst,
             status,
             orgId,
             createdBy,
@@ -29,8 +27,6 @@ router.post("/add", authenticateToken, async (req, res) => {
                 id,
                 {
                     title,
-                    hsnSac,
-                    gst,
                     status,
                     updatedBy,
                     updatedAt: new Date(),
@@ -49,8 +45,6 @@ router.post("/add", authenticateToken, async (req, res) => {
 
         const service = new Service({
             title,
-            hsnSac,
-            gst,
             status,
             orgId,
             createdBy,
@@ -159,7 +153,7 @@ router.post("/get/:id", authenticateToken, async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| Dropdown List (Invoice Page)
+| Dropdown List (Invoice Page) - only id + title needed
 |--------------------------------------------------------------------------
 */
 router.post("/list", authenticateToken, async (req, res) => {
@@ -179,7 +173,7 @@ router.post("/list", authenticateToken, async (req, res) => {
         }
 
         const services = await Service.find(match)
-            .select("title hsnSac gst")
+            .select("title")
             .sort({
                 title: 1,
             });

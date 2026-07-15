@@ -53,7 +53,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 app.use("/api/users", userRoutes);
-app.use("/api/services", serviceRoute);
+app.use("/api/service", serviceRoute);
 app.use("/api/invoice", invoiceRoutes);
 app.use("/api/quotation", quotationRoute);
 app.use("/api/bankDetail", bankDetailRoutes);

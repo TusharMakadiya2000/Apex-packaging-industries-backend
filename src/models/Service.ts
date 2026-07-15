@@ -14,16 +14,6 @@ const serviceSchema = new Schema(
       required: true,
     },
 
-    hsnSac: {
-      type: Number,
-      required: true,
-    },
-
-    gst: {
-      type: Number,
-      default: 18,
-    },
-
     status: {
       type: String,
       enum: ["active", "inactive"],
