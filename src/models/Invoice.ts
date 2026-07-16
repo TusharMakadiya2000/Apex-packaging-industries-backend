@@ -16,13 +16,15 @@ const serviceSchema = new Schema({
     quantity: { type: Number, required: true },
     amount: { type: Number, required: true },
     gst: { type: Number, required: true },
+    serviceId: { type: Schema.Types.ObjectId, ref: "Service" },
 });
 
 // Invoice Schema
 const invoiceSchema = new Schema(
     {
         invoiceID: { type: Number, required: true },
-        siteName: { type: String, required: true },
+        customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+        customerName: { type: String, required: true },
         mobileNumber: { type: String, required: true },
         gstIn: { type: String },
         invoiceDate: { type: Date, default: null },

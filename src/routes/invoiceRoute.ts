@@ -11,7 +11,8 @@ router.post("/add", async (req, res) => {
     try {
         const {
             id,
-            siteName,
+            customerId,
+            customerName,
             mobileNumber,
             gstIn,
             invoiceDate,
@@ -28,7 +29,8 @@ router.post("/add", async (req, res) => {
             const updatedInvoice = await Invoice.findByIdAndUpdate(
                 id,
                 {
-                    siteName,
+                    customerId,
+                    customerName,
                     mobileNumber,
                     gstIn,
                     invoiceDate,
@@ -57,7 +59,8 @@ router.post("/add", async (req, res) => {
 
             const newInvoice = new Invoice({
                 invoiceID: maxInvoiceID + 1, // Generate a new invoice ID
-                siteName: newInvoiceData.siteName || "",
+                customerId: newInvoiceData.customerId || undefined,
+                customerName: newInvoiceData.customerName || "",
                 mobileNumber: newInvoiceData.mobileNumber || "",
                 gstIn: newInvoiceData.gstIn || "",
                 invoiceDate: newInvoiceData.invoiceDate || null,
@@ -106,7 +109,7 @@ router.post("/", authenticateToken, async (req, res) => {
                 ...match,
                 $or: [
                     {
-                        siteName: {
+                        customerName: {
                             $regex: searchText,
                             $options: "i",
                         },
