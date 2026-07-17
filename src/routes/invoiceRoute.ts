@@ -4,6 +4,11 @@ import User from "../models/User";
 import { authenticateToken } from "../middleware/authMiddleware";
 import Invoice from "../models/Invoice";
 import mongoose from "mongoose";
+import {
+    deductInvoiceStock,
+    reconcileInvoiceStock,
+    reverseInvoiceStock,
+} from "../services/inventoryService";
 
 const router = express.Router();
 
@@ -25,6 +30,14 @@ router.post("/add", async (req, res) => {
         } = req.body;
 
         if (id) {
+            // Fetch the pre-update state first, so we can diff old vs new
+            // line-item quantities for stock reconciliation.
+            const existingInvoice = await Invoice.findById(id);
+
+            if (!existingInvoice) {
+                return res.status(404).json({ error: "Invoice not found" });
+            }
+
             // Update existing invoice
             const updatedInvoice = await Invoice.findByIdAndUpdate(
                 id,
@@ -46,6 +59,24 @@ router.post("/add", async (req, res) => {
             if (!updatedInvoice) {
                 return res.status(404).json({ error: "Invoice not found" });
             }
+
+            try {
+                await reconcileInvoiceStock(
+                    existingInvoice.services,
+                    updatedInvoice.services,
+                    updatedInvoice._id,
+                    updatedInvoice.orgId,
+                    updatedBy
+                );
+            } catch (stockErr) {
+                console.error(
+                    "Error reconciling stock on invoice update:",
+                    stockErr
+                );
+                // Invoice update itself already succeeded; surface the
+                // stock issue but don't roll back the invoice save.
+            }
+
             return res.status(200).json(updatedInvoice);
         } else {
             // Add new invoice
@@ -73,6 +104,23 @@ router.post("/add", async (req, res) => {
             });
 
             await newInvoice.save();
+
+            try {
+                await deductInvoiceStock(
+                    newInvoice.services,
+                    newInvoice._id,
+                    newInvoice.orgId,
+                    newInvoice.createdBy
+                );
+            } catch (stockErr) {
+                console.error(
+                    "Error deducting stock on invoice create:",
+                    stockErr
+                );
+                // Invoice itself already saved; surface the stock issue
+                // but don't roll back the invoice save.
+            }
+
             return res.status(201).json(newInvoice);
         }
     } catch (error) {
@@ -203,6 +251,17 @@ router.put("/deleteinvoice/:id", authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
 
+        const existingInvoice = await Invoice.findById(id);
+
+        if (!existingInvoice) {
+            return res.status(404).send({ error: "Invoice not found" });
+        }
+
+        if (existingInvoice.status === "delete") {
+            // Already deleted - stock was already reversed, don't do it twice
+            return res.status(200).send(existingInvoice);
+        }
+
         const invoice = await Invoice.findByIdAndUpdate(
             id,
             { status: "delete" },
@@ -210,7 +269,26 @@ router.put("/deleteinvoice/:id", authenticateToken, async (req, res) => {
         );
 
         if (!invoice) {
-            return res.status(404).send({ error: "User not found" });
+            return res.status(404).send({ error: "Invoice not found" });
+        }
+
+        try {
+            const actingUserEmail = (req as any).user?.email;
+            const actingUser = actingUserEmail
+                ? await User.findOne({ email: actingUserEmail })
+                : null;
+
+            await reverseInvoiceStock(
+                existingInvoice.services,
+                existingInvoice._id,
+                existingInvoice.orgId,
+                actingUser?._id
+            );
+        } catch (stockErr) {
+            console.error(
+                "Error reversing stock on invoice delete:",
+                stockErr
+            );
         }
 
         res.status(200).send(invoice);

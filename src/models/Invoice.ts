@@ -17,6 +17,7 @@ const serviceSchema = new Schema({
     amount: { type: Number, required: true },
     gst: { type: Number, required: true },
     serviceId: { type: Schema.Types.ObjectId, ref: "Service" },
+    inventoryItemId: { type: Schema.Types.ObjectId, ref: "InventoryItem" },
 });
 
 // Invoice Schema
