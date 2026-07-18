@@ -18,31 +18,52 @@ router.post("/add", authenticateToken, async (req, res) => {
     try {
         const {
             id,
-            name,
             type,
+            name,
+            gsm,
+            paperType,
+            size,
             hsnSac,
             unit,
             reorderLevel,
             costPrice,
-            sellingPrice,
             status,
             orgId,
             createdBy,
             updatedBy,
         } = req.body;
 
+        // For raw materials the display name is always derived from
+        // gsm/paperType/size - never trust a client-supplied name here,
+        // so it can never drift out of sync with the actual spec.
+        const resolvedName =
+            type === "raw_material"
+                ? `${gsm} GSM ${paperType} ${size}"`
+                : name;
+
+        const resolvedUnit = type === "raw_material" ? "kg" : unit || "pcs";
+
+        const payload: any = {
+            type,
+            name: resolvedName,
+            hsnSac,
+            unit: resolvedUnit,
+            reorderLevel,
+            costPrice,
+            status,
+        };
+
+        if (type === "raw_material") {
+            payload.gsm = gsm;
+            payload.paperType = paperType;
+            payload.size = size;
+        }
+
         if (id) {
             const item = await InventoryItem.findByIdAndUpdate(
                 id,
                 {
-                    name,
-                    type,
-                    hsnSac,
-                    unit,
-                    reorderLevel,
-                    costPrice,
-                    sellingPrice,
-                    status,
+                    ...payload,
                     updatedBy,
                     updatedAt: new Date(),
                 },
@@ -59,14 +80,7 @@ router.post("/add", authenticateToken, async (req, res) => {
         }
 
         const item = new InventoryItem({
-            name,
-            type,
-            hsnSac,
-            unit,
-            reorderLevel,
-            costPrice,
-            sellingPrice,
-            status,
+            ...payload,
             orgId,
             createdBy,
             updatedBy,
@@ -206,7 +220,9 @@ router.post("/list", authenticateToken, async (req, res) => {
         }
 
         const items = await InventoryItem.find(match)
-            .select("name type unit hsnSac currentStock sellingPrice")
+            .select(
+                "name type unit hsnSac currentStock gsm paperType size"
+            )
             .sort({ name: 1 });
 
         res.json(items);
