@@ -25,6 +25,7 @@ router.post("/add", async (req, res) => {
             // invoiceType,
             orgId,
             services,
+            paymentStatus,
             createdBy,
             updatedBy,
         } = req.body;
@@ -50,6 +51,8 @@ router.post("/add", async (req, res) => {
                     address,
                     // invoiceType,
                     services,
+                    paymentStatus:
+                        paymentStatus || existingInvoice.paymentStatus,
                     updatedBy,
                     updatedAt: new Date(),
                 },
@@ -99,6 +102,7 @@ router.post("/add", async (req, res) => {
                 // invoiceType: newInvoiceData.invoiceType || "",
                 orgId: newInvoiceData.orgId,
                 services: newInvoiceData.services || [],
+                paymentStatus: newInvoiceData.paymentStatus || "pending",
                 createdBy: newInvoiceData.createdBy,
                 updatedBy: newInvoiceData.updatedBy,
             });
@@ -243,6 +247,107 @@ router.post("/get-count", authenticateToken, async (req, res) => {
         res.status(200).json(count);
     } catch (error) {
         console.error("Error getting invoices:", error);
+        res.status(500).send(error);
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
+| Payment Summary (Dashboard) - total pending vs paid amounts
+|--------------------------------------------------------------------------
+| Invoice totals aren't stored directly - each is derived from its line
+| items (amount * quantity, plus GST). This computes that total per
+| invoice inside the aggregation, then groups by paymentStatus.
+*/
+router.post("/payment-summary", authenticateToken, async (req, res) => {
+    try {
+        const userEmail = (req as any).user.email;
+        const user = await User.findOne({ email: userEmail });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        let match: any = { $and: [{ status: { $ne: "delete" } }] };
+
+        if (user.role === "org") {
+            match["$and"].push({ orgId: user.orgId });
+        } else if (user.role !== "SA") {
+            match["$and"].push({ createdBy: user._id });
+        }
+
+        const results = await Invoice.aggregate([
+            { $match: match },
+            {
+                $addFields: {
+                    invoiceTotal: {
+                        $sum: {
+                            $map: {
+                                input: "$services",
+                                as: "s",
+                                in: {
+                                    $let: {
+                                        vars: {
+                                            base: {
+                                                $multiply: [
+                                                    "$$s.amount",
+                                                    "$$s.quantity",
+                                                ],
+                                            },
+                                        },
+                                        in: {
+                                            $add: [
+                                                "$$base",
+                                                {
+                                                    $multiply: [
+                                                        "$$base",
+                                                        {
+                                                            $divide: [
+                                                                "$$s.gst",
+                                                                100,
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: { $ifNull: ["$paymentStatus", "pending"] },
+                    totalAmount: { $sum: "$invoiceTotal" },
+                    count: { $sum: 1 },
+                },
+            },
+        ]);
+
+        const summary = {
+            pending: { totalAmount: 0, count: 0 },
+            paid: { totalAmount: 0, count: 0 },
+        };
+
+        for (const row of results) {
+            if (row._id === "paid") {
+                summary.paid = {
+                    totalAmount: row.totalAmount,
+                    count: row.count,
+                };
+            } else {
+                summary.pending = {
+                    totalAmount: row.totalAmount,
+                    count: row.count,
+                };
+            }
+        }
+
+        res.status(200).json(summary);
+    } catch (error) {
+        console.error("Error getting payment summary:", error);
         res.status(500).send(error);
     }
 });

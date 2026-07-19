@@ -38,6 +38,11 @@ const invoiceSchema = new Schema(
             enum: ["active", "delete"],
             default: "active",
         },
+        paymentStatus: {
+            type: String,
+            enum: ["pending", "paid"],
+            default: "pending",
+        },
         createdBy: { type: Schema.Types.ObjectId, ref: "User" },
         updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     },

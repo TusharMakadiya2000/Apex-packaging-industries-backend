@@ -340,4 +340,73 @@ router.put("/delete/:id", authenticateToken, async (req, res) => {
     }
 });
 
+/*
+|--------------------------------------------------------------------------
+| Inventory Summary (Dashboard) - per-record stock value + grand total,
+| plus total weight of raw materials (already tracked in kg)
+|--------------------------------------------------------------------------
+*/
+router.post("/summary", authenticateToken, async (req, res) => {
+    try {
+        const userEmail = (req as any).user.email;
+
+        const user = await User.findOne({
+            email: userEmail,
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                error: "User not found",
+            });
+        }
+
+        let match: any = {
+            status: { $ne: "delete" },
+        };
+
+        if (user.role === "org") {
+            match.orgId = user.orgId;
+        }
+
+        if (user.role !== "SA" && user.role !== "org") {
+            match.createdBy = user._id;
+        }
+
+        const items = await InventoryItem.find(match).select(
+            "name type unit currentStock costPrice"
+        );
+
+        const records = items.map((item: any) => {
+            const total = (item.currentStock || 0) * (item.costPrice || 0);
+            return {
+                id: item._id,
+                name: item.name,
+                type: item.type,
+                unit: item.unit,
+                currentStock: item.currentStock || 0,
+                costPrice: item.costPrice || 0,
+                total,
+            };
+        });
+
+        const grandTotal = records.reduce((sum, r) => sum + r.total, 0);
+
+        const totalWeight = items
+            .filter((item: any) => item.type === "raw_material")
+            .reduce(
+                (sum: number, item: any) => sum + (item.currentStock || 0),
+                0
+            );
+
+        res.status(200).json({
+            records,
+            grandTotal,
+            totalWeight,
+        });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json(err);
+    }
+});
+
 export default router;
