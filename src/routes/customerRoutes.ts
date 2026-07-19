@@ -1,6 +1,7 @@
 import express from "express";
 import User from "../models/User";
 import Customer from "../models/Customer";
+import Invoice from "../models/Invoice";
 import { authenticateToken } from "../middleware/authMiddleware";
 
 const router = express.Router();
@@ -43,6 +44,33 @@ router.post("/add", authenticateToken, async (req, res) => {
                 return res.status(404).json({
                     error: "Customer not found",
                 });
+            }
+
+            // ---- Cascade the edit onto every invoice linked to this customer ----
+            // Only sync fields that were actually provided, so a partial
+            // request can never accidentally wipe data on those invoices.
+            const syncFields: any = {};
+            if (customerName !== undefined)
+                syncFields.customerName = customerName;
+            if (mobileNumber !== undefined)
+                syncFields.mobileNumber = mobileNumber;
+            if (gstIn !== undefined) syncFields.gstIn = gstIn;
+            if (address !== undefined) syncFields.address = address;
+
+            if (Object.keys(syncFields).length > 0) {
+                try {
+                    await Invoice.updateMany(
+                        { customerId: id, status: { $ne: "delete" } },
+                        { $set: syncFields }
+                    );
+                } catch (syncErr) {
+                    console.error(
+                        "Error syncing customer info to invoices:",
+                        syncErr
+                    );
+                    // Customer update itself already succeeded; surface the
+                    // sync issue but don't fail the customer save.
+                }
             }
 
             return res.status(200).json(customer);
