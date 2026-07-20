@@ -21,16 +21,9 @@ const stockTransactionSchema = new Schema(
             required: true,
         },
 
-        // Roll count (raw material) or unit count (finished good) moved.
         quantity: {
             type: Number,
             required: true,
-        },
-
-        // Weight (kg) moved alongside quantity, for raw materials only.
-        // Optional - manual invoice-driven movements don't set this.
-        weight: {
-            type: Number,
         },
 
         reason: {
@@ -54,16 +47,12 @@ const stockTransactionSchema = new Schema(
             type: String,
         },
 
-        // Snapshot of currentStock (roll count) immediately after this
-        // transaction, for auditability.
+        // Snapshot of currentStock immediately after this transaction,
+        // for auditability - lets you reconstruct history without
+        // replaying every transaction from zero.
         balanceAfter: {
             type: Number,
             required: true,
-        },
-
-        // Snapshot of totalWeight immediately after this transaction.
-        weightBalanceAfter: {
-            type: Number,
         },
 
         createdBy: {
