@@ -36,20 +36,29 @@ const inventoryItemSchema = new Schema(
             type: Number, // roll size, e.g. 25, 30, 35, 40, 45, 50
         },
 
+        // Weight of a SINGLE roll, in kg. currentStock counts ROLLS
+        // (physical units), not weight - the actual total weight of stock
+        // is always derived as currentStock * rollWeight, never stored
+        // directly, so it can never drift out of sync.
+        rollWeight: {
+            type: Number,
+        },
+
         hsnSac: {
             type: Number,
         },
 
-        // Always "kg" for raw materials. Free text for finished goods
-        // (pcs, box, etc.) since those aren't sold by weight.
+        // "roll" for raw materials (currentStock counts whole physical
+        // rolls). Free text for finished goods (pcs, box, etc.).
         unit: {
             type: String,
             required: true,
-            default: "kg",
+            default: "roll",
         },
 
-        // Cached running total - always updated via a StockTransaction,
-        // never edited directly from the item edit form.
+        // Cached running count of rolls (or pcs/box for finished goods).
+        // Always updated via a StockTransaction, never edited directly
+        // from the item edit form.
         currentStock: {
             type: Number,
             default: 0,
@@ -60,8 +69,10 @@ const inventoryItemSchema = new Schema(
             default: 0,
         },
 
-        // For raw materials this is "Purchase Rate (per KG)".
-        // For finished goods it's a generic cost price.
+        // For raw materials this is "Purchase Rate (per KG)" - applied
+        // against the DERIVED total weight (currentStock * rollWeight),
+        // not against currentStock directly. For finished goods it's a
+        // generic per-unit cost price.
         costPrice: {
             type: Number,
         },

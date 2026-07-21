@@ -23,6 +23,7 @@ router.post("/add", authenticateToken, async (req, res) => {
             gsm,
             paperType,
             size,
+            rollWeight,
             hsnSac,
             unit,
             reorderLevel,
@@ -41,7 +42,7 @@ router.post("/add", authenticateToken, async (req, res) => {
                 ? `${gsm} GSM ${paperType} ${size}"`
                 : name;
 
-        const resolvedUnit = type === "raw_material" ? "kg" : unit || "pcs";
+        const resolvedUnit = type === "raw_material" ? "roll" : unit || "pcs";
 
         const payload: any = {
             type,
@@ -57,6 +58,7 @@ router.post("/add", authenticateToken, async (req, res) => {
             payload.gsm = gsm;
             payload.paperType = paperType;
             payload.size = size;
+            payload.rollWeight = rollWeight;
         }
 
         if (id) {
@@ -221,7 +223,7 @@ router.post("/list", authenticateToken, async (req, res) => {
 
         const items = await InventoryItem.find(match)
             .select(
-                "name type unit hsnSac currentStock gsm paperType size"
+                "name type unit hsnSac currentStock gsm paperType size rollWeight"
             )
             .sort({ name: 1 });
 
@@ -239,7 +241,7 @@ router.post("/list", authenticateToken, async (req, res) => {
 */
 router.post("/stock-in", authenticateToken, async (req, res) => {
     try {
-        const { itemId, quantity, reason, notes, orgId, createdBy } =
+        const { itemId, quantity, weight, reason, notes, orgId, createdBy } =
             req.body;
 
         if (!itemId || !quantity) {
@@ -252,6 +254,7 @@ router.post("/stock-in", authenticateToken, async (req, res) => {
             itemId,
             direction: "in",
             quantity: Number(quantity),
+            weight: weight ? Number(weight) : 0,
             reason: reason || "purchase",
             notes,
             orgId,
@@ -278,7 +281,7 @@ router.post("/stock-in", authenticateToken, async (req, res) => {
 */
 router.post("/stock-out", authenticateToken, async (req, res) => {
     try {
-        const { itemId, quantity, reason, notes, orgId, createdBy } =
+        const { itemId, quantity, weight, reason, notes, orgId, createdBy } =
             req.body;
 
         if (!itemId || !quantity) {
@@ -291,6 +294,7 @@ router.post("/stock-out", authenticateToken, async (req, res) => {
             itemId,
             direction: "out",
             quantity: Number(quantity),
+            weight: weight ? Number(weight) : 0,
             reason: reason || "adjustment",
             notes,
             orgId,
@@ -373,17 +377,31 @@ router.post("/summary", authenticateToken, async (req, res) => {
         }
 
         const items = await InventoryItem.find(match).select(
-            "name type unit currentStock costPrice"
+            "name type unit currentStock rollWeight costPrice"
         );
 
         const records = items.map((item: any) => {
-            const total = (item.currentStock || 0) * (item.costPrice || 0);
+            // Raw materials: currentStock counts ROLLS, not weight. Actual
+            // weight is always derived here (never stored), and value is
+            // that derived weight x the per-kg purchase rate.
+            const rollTotalWeight =
+                item.type === "raw_material"
+                    ? (item.currentStock || 0) * (item.rollWeight || 0)
+                    : undefined;
+
+            const total =
+                item.type === "raw_material"
+                    ? rollTotalWeight! * (item.costPrice || 0)
+                    : (item.currentStock || 0) * (item.costPrice || 0);
+
             return {
                 id: item._id,
                 name: item.name,
                 type: item.type,
                 unit: item.unit,
                 currentStock: item.currentStock || 0,
+                rollWeight: item.rollWeight || 0,
+                rollTotalWeight: rollTotalWeight || 0,
                 costPrice: item.costPrice || 0,
                 total,
             };
@@ -391,12 +409,9 @@ router.post("/summary", authenticateToken, async (req, res) => {
 
         const grandTotal = records.reduce((sum, r) => sum + r.total, 0);
 
-        const totalWeight = items
-            .filter((item: any) => item.type === "raw_material")
-            .reduce(
-                (sum: number, item: any) => sum + (item.currentStock || 0),
-                0
-            );
+        const totalWeight = records
+            .filter((r) => r.type === "raw_material")
+            .reduce((sum, r) => sum + r.rollTotalWeight, 0);
 
         res.status(200).json({
             records,
