@@ -10,15 +10,21 @@ interface TokenPayload {
 }
 
 // Generate a JWT token
+// rememberMe = true -> long-lived session (30 days)
+// rememberMe = false/undefined -> short-lived session (falls back to
+// JWT_EXPIRES_IN env value, or 1h if that isn't set)
 export const generateToken = (
     userId: any,
     email: string,
     name: string,
     role: string,
     orgId: any,
+    rememberMe?: boolean
 ): string => {
     const secret = process.env.JWT_SECRET as string;
-    const expiresIn = process.env.JWT_EXPIRES_IN || "1h";
+    const expiresIn = rememberMe
+        ? "30d"
+        : process.env.JWT_EXPIRES_IN || "1h";
 
     if (!secret) {
         throw new Error("JWT_SECRET is not defined in environment variables.");
