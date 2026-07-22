@@ -14,7 +14,7 @@ const serviceSchema = new Schema({
     title: { type: String, required: true },
     quantity: { type: Number, required: true },
     amount: { type: Number, required: true },
-    measurement: { type: String, required: true },
+    serviceId: { type: Schema.Types.ObjectId, ref: "Service" },
 });
 
 // Quotation Schema
@@ -23,7 +23,6 @@ const quotationSchema = new Schema(
         quotationID: { type: Number, required: true },
         customerName: { type: String, required: false },
         mobileNumber: { type: String, required: false },
-        siteName: { type: String, required: false },
         quotationDate: { type: Date, default: null },
         address: { type: addressSchema, required: true },
         // quotationType: { type: String, required: true },

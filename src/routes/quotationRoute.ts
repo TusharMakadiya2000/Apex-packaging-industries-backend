@@ -13,7 +13,6 @@ router.post("/add", authenticateToken, async (req, res) => {
             id,
             customerName,
             mobileNumber,
-            siteName,
             quotationDate,
             address,
             // invoiceType,
@@ -30,7 +29,6 @@ router.post("/add", authenticateToken, async (req, res) => {
                 {
                     customerName,
                     mobileNumber,
-                    siteName,
                     quotationDate,
                     address,
                     // invoiceType,
@@ -61,7 +59,6 @@ router.post("/add", authenticateToken, async (req, res) => {
                 quotationID: maxQuotationID + 1, // Generate a new Quotation ID
                 customerName: newQuotationData.customerName || "",
                 mobileNumber: newQuotationData.mobileNumber || "",
-                siteName: newQuotationData.siteName || "",
                 quotationDate: newQuotationData.quotationDate || null,
                 address: newQuotationData.address || {},
                 // invoiceType: newInvoiceData.invoiceType || "",
@@ -108,7 +105,7 @@ router.post("/", authenticateToken, async (req, res) => {
                 ...match,
                 $or: [
                     {
-                        siteName: {
+                        customerName: {
                             $regex: searchText,
                             $options: "i",
                         },
