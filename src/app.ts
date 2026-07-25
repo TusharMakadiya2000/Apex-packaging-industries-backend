@@ -8,6 +8,8 @@ import userRoutes from "./routes/userRoutes";
 import serviceRoute from "./routes/serviceRoute";
 import customerRoutes from "./routes/customerRoutes";
 import inventoryRoutes from "./routes/inventoryRoutes";
+import supplierOrderRoutes from "./routes/supplierOrderRoutes";
+import supplierRoutes from "./routes/supplierRoutes";
 import invoiceRoutes from "./routes/invoiceRoute";
 import quotationRoute from "./routes/quotationRoute";
 import bankDetailRoutes from "./routes/bankDetailRoutes";
@@ -60,6 +62,8 @@ app.use("/api/customer", customerRoutes);
 app.use("/api/invoice", invoiceRoutes);
 app.use("/api/quotation", quotationRoute);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/supplier", supplierRoutes);
+app.use("/api/supplier-order", supplierOrderRoutes);
 app.use("/api/bankDetail", bankDetailRoutes);
 app.use("/api/org", orgRoutes);
 
