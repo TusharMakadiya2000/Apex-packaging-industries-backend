@@ -1,6 +1,5 @@
 import { Schema, model } from "mongoose";
 
-// Address Schema
 const addressSchema = new Schema({
     country: { type: String, required: false },
     state: { type: String, required: false },
@@ -9,7 +8,6 @@ const addressSchema = new Schema({
     address1: { type: String, required: false },
 });
 
-// Service Schema
 const serviceSchema = new Schema({
     title: { type: String, required: true },
     hsnSac: { type: Number, required: true },
@@ -20,7 +18,20 @@ const serviceSchema = new Schema({
     inventoryItemId: { type: Schema.Types.ObjectId, ref: "InventoryItem" },
 });
 
-// Invoice Schema
+// NEW: one entry per installment received
+const paymentSchema = new Schema({
+    amount: { type: Number, required: true, min: 0.01 },
+    paidOn: { type: Date, default: Date.now },
+    method: {
+        type: String,
+        enum: ["cash", "upi", "bank_transfer", "cheque", "card", "other"],
+        default: "cash",
+    },
+    reference: { type: String, default: "" }, // UPI ref / cheque no.
+    note: { type: String, default: "" },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
+});
+
 const invoiceSchema = new Schema(
     {
         invoiceID: { type: Number, required: true },
@@ -30,7 +41,6 @@ const invoiceSchema = new Schema(
         gstIn: { type: String },
         invoiceDate: { type: Date, default: null },
         address: { type: addressSchema, required: true },
-        // invoiceType: { type: String, required: true },
         orgId: { type: Schema.Types.ObjectId, ref: "Org" },
         services: { type: [serviceSchema], required: true },
         status: {
@@ -38,18 +48,19 @@ const invoiceSchema = new Schema(
             enum: ["active", "delete"],
             default: "active",
         },
+        // CHANGED: added "partial"
         paymentStatus: {
             type: String,
-            enum: ["pending", "paid"],
+            enum: ["pending", "partial", "paid"],
             default: "pending",
         },
+        // NEW
+        payments: { type: [paymentSchema], default: [] },
         createdBy: { type: Schema.Types.ObjectId, ref: "User" },
         updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     },
     { timestamps: true }
 );
 
-// Create the Invoice Model
 const Invoice = model("Invoice", invoiceSchema);
-
 export default Invoice;
