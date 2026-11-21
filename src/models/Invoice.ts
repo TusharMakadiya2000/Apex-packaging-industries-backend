@@ -26,7 +26,7 @@ const invoiceSchema = new Schema(
         invoiceID: { type: Number, required: true },
         customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
         customerName: { type: String, required: true },
-        mobileNumber: { type: String, required: true },
+        mobileNumber: { type: String, required: false, default: "" },
         gstIn: { type: String },
         invoiceDate: { type: Date, default: null },
         address: { type: addressSchema, required: true },

@@ -27,7 +27,8 @@ const customerSchema = new Schema(
 
         mobileNumber: {
             type: String,
-            required: true,
+            required: false,
+            default: "",
         },
 
         gstIn: {
