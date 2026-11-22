@@ -9,12 +9,6 @@ import {
     reconcileInvoiceStock,
     reverseInvoiceStock,
 } from "../services/inventoryService";
-import {
-    calcInvoiceTotal,
-    calcPaidAmount,
-    derivePaymentStatus,
-    round2,
-} from "../utils/invoicePayment";
 
 const router = express.Router();
 
@@ -45,12 +39,6 @@ router.post("/add", async (req, res) => {
                 return res.status(404).json({ error: "Invoice not found" });
             }
 
-            const newServices = services ?? existingInvoice.services;
-                const newStatus = derivePaymentStatus(
-                    calcInvoiceTotal(newServices as any),
-                    calcPaidAmount(existingInvoice.payments as any)
-                );
-
             // Update existing invoice
             const updatedInvoice = await Invoice.findByIdAndUpdate(
                 id,
@@ -63,7 +51,8 @@ router.post("/add", async (req, res) => {
                     address,
                     // invoiceType,
                     services,
-                    paymentStatus: newStatus,
+                    paymentStatus:
+                        paymentStatus || existingInvoice.paymentStatus,
                     updatedBy,
                     updatedAt: new Date(),
                 },
@@ -272,19 +261,21 @@ router.post("/get-count", authenticateToken, async (req, res) => {
 */
 router.post("/payment-summary", authenticateToken, async (req, res) => {
     try {
-        const user = await User.findOne({ email: (req as any).user.email });
+        const userEmail = (req as any).user.email;
+        const user = await User.findOne({ email: userEmail });
         if (!user) {
             return res.status(404).json({ error: "User not found" });
         }
 
         let match: any = { $and: [{ status: { $ne: "delete" } }] };
+
         if (user.role === "org") {
             match["$and"].push({ orgId: user.orgId });
         } else if (user.role !== "SA") {
             match["$and"].push({ createdBy: user._id });
         }
 
-        const [row] = await Invoice.aggregate([
+        const results = await Invoice.aggregate([
             { $match: match },
             {
                 $addFields: {
@@ -294,145 +285,72 @@ router.post("/payment-summary", authenticateToken, async (req, res) => {
                                 input: "$services",
                                 as: "s",
                                 in: {
-                                    $multiply: [
-                                        { $multiply: ["$$s.amount", "$$s.quantity"] },
-                                        { $add: [1, { $divide: ["$$s.gst", 100] }] },
-                                    ],
+                                    $let: {
+                                        vars: {
+                                            base: {
+                                                $multiply: [
+                                                    "$$s.amount",
+                                                    "$$s.quantity",
+                                                ],
+                                            },
+                                        },
+                                        in: {
+                                            $add: [
+                                                "$$base",
+                                                {
+                                                    $multiply: [
+                                                        "$$base",
+                                                        {
+                                                            $divide: [
+                                                                "$$s.gst",
+                                                                100,
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
                                 },
                             },
                         },
                     },
-                    paidAmount: { $sum: "$payments.amount" },
                 },
             },
             {
                 $group: {
-                    _id: null,
-                    totalBilled: { $sum: "$invoiceTotal" },
-                    totalReceived: { $sum: "$paidAmount" },
-                    pendingCount: {
-                        $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, 0, 1] },
-                    },
-                    partialCount: {
-                        $sum: { $cond: [{ $eq: ["$paymentStatus", "partial"] }, 1, 0] },
-                    },
-                    paidCount: {
-                        $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, 1, 0] },
-                    },
+                    _id: { $ifNull: ["$paymentStatus", "pending"] },
+                    totalAmount: { $sum: "$invoiceTotal" },
+                    count: { $sum: 1 },
                 },
             },
         ]);
 
-        const billed = round2(row?.totalBilled ?? 0);
-        const received = round2(row?.totalReceived ?? 0);
+        const summary = {
+            pending: { totalAmount: 0, count: 0 },
+            paid: { totalAmount: 0, count: 0 },
+        };
 
-        res.status(200).json({
-            totalBilled: billed,
-            totalReceived: received,
-            totalPending: round2(billed - received),
-            counts: {
-                pending: (row?.pendingCount ?? 0) - (row?.partialCount ?? 0),
-                partial: row?.partialCount ?? 0,
-                paid: row?.paidCount ?? 0,
-            },
-        });
+        for (const row of results) {
+            if (row._id === "paid") {
+                summary.paid = {
+                    totalAmount: row.totalAmount,
+                    count: row.count,
+                };
+            } else {
+                summary.pending = {
+                    totalAmount: row.totalAmount,
+                    count: row.count,
+                };
+            }
+        }
+
+        res.status(200).json(summary);
     } catch (error) {
         console.error("Error getting payment summary:", error);
         res.status(500).send(error);
     }
 });
-
-// Add one installment
-router.post("/:id/payments", authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { amount, paidOn, method, reference, note } = req.body;
-
-        const amt = round2(Number(amount));
-        if (!Number.isFinite(amt) || amt <= 0) {
-            return res.status(400).json({ error: "Enter a valid amount" });
-        }
-
-        const invoice = await Invoice.findById(id);
-        if (!invoice || invoice.status === "delete") {
-            return res.status(404).json({ error: "Invoice not found" });
-        }
-
-        const total = calcInvoiceTotal(invoice.services as any);
-        const alreadyPaid = calcPaidAmount(invoice.payments as any);
-        const balance = round2(total - alreadyPaid);
-
-        if (amt > balance + 0.005) {
-            return res.status(400).json({
-                error: `Amount exceeds balance due (₹${balance})`,
-                balance,
-            });
-        }
-
-        const user = await User.findOne({ email: (req as any).user.email });
-
-        invoice.payments.push({
-            amount: amt,
-            paidOn: paidOn ? new Date(paidOn) : new Date(),
-            method: method || "cash",
-            reference: reference || "",
-            note: note || "",
-            createdBy: user?._id,
-        } as any);
-
-        const paid = calcPaidAmount(invoice.payments as any);
-        invoice.paymentStatus = derivePaymentStatus(total, paid);
-        invoice.updatedBy = user?._id as any;
-        await invoice.save();
-
-        return res.status(201).json({
-            invoice,
-            totalAmount: total,
-            paidAmount: paid,
-            balanceAmount: round2(total - paid),
-        });
-    } catch (error) {
-        console.error("Error adding payment:", error);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
-});
-
-// Remove a wrongly entered installment
-router.delete(
-    "/:id/payments/:paymentId",
-    authenticateToken,
-    async (req, res) => {
-        try {
-            const { id, paymentId } = req.params;
-
-            const invoice = await Invoice.findById(id);
-            if (!invoice || invoice.status === "delete") {
-                return res.status(404).json({ error: "Invoice not found" });
-            }
-
-            const payment = (invoice.payments as any).id(paymentId);
-            if (!payment) {
-                return res.status(404).json({ error: "Payment not found" });
-            }
-            payment.deleteOne();
-
-            const total = calcInvoiceTotal(invoice.services as any);
-            const paid = calcPaidAmount(invoice.payments as any);
-            invoice.paymentStatus = derivePaymentStatus(total, paid);
-            await invoice.save();
-
-            return res.status(200).json({
-                invoice,
-                totalAmount: total,
-                paidAmount: paid,
-                balanceAmount: round2(total - paid),
-            });
-        } catch (error) {
-            console.error("Error removing payment:", error);
-            res.status(500).json({ error: "Internal Server Error" });
-        }
-    }
-);
 
 router.put("/deleteinvoice/:id", authenticateToken, async (req, res) => {
     try {
