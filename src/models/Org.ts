@@ -11,7 +11,7 @@ const orgSchema = new Schema(
         },
         invoiceType: {
             type: [String],
-            enum: ["umiya-1", "krishna-1"],
+            enum: ["Apex Packaging Industries"],
             required: true,
           },
         createdBy: { type: Schema.Types.ObjectId, ref: "User" },

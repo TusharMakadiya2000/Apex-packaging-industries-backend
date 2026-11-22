@@ -269,4 +269,106 @@ router.put("/payment/delete/:id", authenticateToken, async (req, res) => {
     }
 });
 
+/* ---------------- Dashboard summary: pending vs received ---------------- */
+router.post("/summary", authenticateToken, async (req, res) => {
+    try {
+        const user: any = await getUser(req);
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const scope = getScope(user);
+
+        // Total billed per customer
+        const billed = await Invoice.aggregate([
+            { $match: { status: { $ne: "delete" }, ...scope } },
+            {
+                $addFields: {
+                    invoiceTotal: {
+                        $sum: {
+                            $map: {
+                                input: "$services",
+                                as: "s",
+                                in: {
+                                    $multiply: [
+                                        { $multiply: ["$$s.amount", "$$s.quantity"] },
+                                        { $add: [1, { $divide: ["$$s.gst", 100] }] },
+                                    ],
+                                },
+                            },
+                        },
+                    },
+                    partyKey: {
+                        $cond: [
+                            { $eq: [{ $type: "$customerId" }, "objectId"] },
+                            { $toString: "$customerId" },
+                            {
+                                $concat: [
+                                    {
+                                        $toLower: {
+                                            $trim: { input: { $ifNull: ["$customerName", ""] } },
+                                        },
+                                    },
+                                    "|",
+                                    { $trim: { input: { $ifNull: ["$mobileNumber", ""] } } },
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+            { $group: { _id: "$partyKey", totalAmount: { $sum: "$invoiceTotal" } } },
+        ]);
+
+        // Total received per customer
+        const received = await Payment.aggregate([
+            { $match: { status: { $ne: "delete" }, ...scope } },
+            {
+                $group: {
+                    _id: "$partyKey",
+                    receivedAmount: { $sum: "$amount" },
+                    paymentCount: { $sum: 1 },
+                },
+            },
+        ]);
+
+        const map = new Map<string, { billed: number; received: number }>();
+        for (const b of billed) {
+            map.set(b._id, { billed: b.totalAmount, received: 0 });
+        }
+
+        let paymentEntries = 0;
+        for (const r of received) {
+            const row = map.get(r._id) || { billed: 0, received: 0 };
+            row.received = r.receivedAmount;
+            map.set(r._id, row);
+            paymentEntries += r.paymentCount;
+        }
+
+        let totalBilled = 0;
+        let totalReceived = 0;
+        let pendingCustomers = 0;
+
+        for (const row of map.values()) {
+            totalBilled += row.billed;
+            totalReceived += row.received;
+            if (round2(row.billed - row.received) > 0.005) pendingCustomers++;
+        }
+
+        // Same totals as the Receivable page
+        res.status(200).json({
+            pending: {
+                totalAmount: round2(totalBilled - totalReceived),
+                count: pendingCustomers, // customers who still owe money
+            },
+            paid: {
+                totalAmount: round2(totalReceived),
+                count: paymentEntries, // number of payment entries received
+            },
+            billed: { totalAmount: round2(totalBilled) },
+        });
+    } catch (error) {
+        console.error("Error getting receivable summary:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+});
+
 export default router;
