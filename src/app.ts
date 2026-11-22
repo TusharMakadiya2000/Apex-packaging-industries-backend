@@ -14,6 +14,7 @@ import invoiceRoutes from "./routes/invoiceRoute";
 import quotationRoute from "./routes/quotationRoute";
 import bankDetailRoutes from "./routes/bankDetailRoutes";
 import orgRoutes from "./routes/orgRoutes";
+import receivableRoutes from "./routes/receivableRoute";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use("/api/supplier", supplierRoutes);
 app.use("/api/supplier-order", supplierOrderRoutes);
 app.use("/api/bankDetail", bankDetailRoutes);
 app.use("/api/org", orgRoutes);
+app.use("/api/receivable", receivableRoutes);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     res.status(err.status || 500);
