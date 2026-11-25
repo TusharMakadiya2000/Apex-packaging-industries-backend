@@ -12,6 +12,7 @@ const addressSchema = new Schema({
 // Service Schema
 const serviceSchema = new Schema({
     title: { type: String, required: true },
+    desc: { type: String, required: false, default: "" },
     hsnSac: { type: Number, required: true },
     quantity: { type: Number, required: true },
     amount: { type: Number, required: true },
